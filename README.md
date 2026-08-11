@@ -73,6 +73,15 @@ planned major or Kubernetes minor upgrade is desired.
 
 ## Published tags
 
-- `latest` tracks the `main` branch.
+- `latest`, `debian13`, and `trixie` track the `main` branch.
 - `sha-<commit>` identifies an immutable source revision.
-- Pushing a Git tag such as `v2026.8.0` publishes the same image tag.
+- A Git tag such as `v2026.8.0` publishes immutable `2026.8.0` and monthly
+  `2026.8` image tags.
+
+Releases use calendar versions in `YYYY.M.PATCH` form. Increment `PATCH` for
+multiple releases in the same month:
+
+```sh
+git tag v2026.8.0
+git push origin v2026.8.0
+```
