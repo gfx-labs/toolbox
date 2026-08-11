@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly root_dir
+readonly dockerfile="${root_dir}/Dockerfile"
+readonly base_image="${1:-debian:13-slim}"
+
+if ! command -v docker >/dev/null 2>&1; then
+  printf 'error: docker is required\n' >&2
+  exit 1
+fi
+
+if [[ "${base_image}" == *@* ]]; then
+  printf 'error: pass an image tag without a digest (for example, debian:13-slim)\n' >&2
+  exit 1
+fi
+
+if [[ "${base_image}" != debian:* ]]; then
+  printf 'error: the runtime base image must use an official debian tag\n' >&2
+  exit 1
+fi
+
+from_count="$(grep -c '^FROM debian:' "${dockerfile}")"
+if [[ "${from_count}" != 1 ]]; then
+  printf 'error: expected exactly one Debian FROM instruction in %s\n' "${dockerfile}" >&2
+  exit 1
+fi
+
+printf 'Resolving %s...\n' "${base_image}"
+digest="$(docker buildx imagetools inspect "${base_image}" --format '{{.Manifest.Digest}}')"
+
+if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  printf 'error: registry returned an invalid digest: %s\n' "${digest}" >&2
+  exit 1
+fi
+
+sed -i.bak -E "s|^FROM debian:.*$|FROM ${base_image}@${digest} AS os|" "${dockerfile}"
+rm "${dockerfile}.bak"
+
+printf 'Updated Dockerfile to %s@%s\n' "${base_image}" "${digest}"

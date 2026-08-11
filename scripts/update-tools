@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly root_dir
+readonly config_file="${root_dir}/image-tools.toml"
+readonly mise_image="jdxcode/mise:2026.8.3"
+
+update_tool() {
+  local tool="$1"
+  local version_query="$2"
+  local version
+
+  version="$(docker run --rm "${mise_image}" latest "${version_query}")"
+  if [[ ! "${version}" =~ ^[0-9]+([.][0-9]+)*$ ]]; then
+    printf 'error: invalid version returned for %s: %s\n' "${tool}" "${version}" >&2
+    exit 1
+  fi
+
+  sed -i.bak -E "s|^${tool} = .*$|${tool} = \"${version}\"|" "${config_file}"
+  rm "${config_file}.bak"
+  printf '%-10s %s\n' "${tool}" "${version}"
+}
+
+update_temporal() {
+  local version
+  local checksum
+  local filename
+  local amd64_checksum=""
+  local arm64_checksum=""
+
+  version="$(docker run --rm "${mise_image}" latest 'github:temporalio/cli@1')"
+  while read -r checksum filename; do
+    case "${filename}" in
+      "temporal_cli_${version}_linux_amd64.tar.gz") amd64_checksum="${checksum}" ;;
+      "temporal_cli_${version}_linux_arm64.tar.gz") arm64_checksum="${checksum}" ;;
+    esac
+  done < <(curl --fail --location --silent --show-error \
+    "https://github.com/temporalio/cli/releases/download/v${version}/checksums.txt")
+
+  if [[ ! "${amd64_checksum}" =~ ^[0-9a-f]{64}$ ]] \
+    || [[ ! "${arm64_checksum}" =~ ^[0-9a-f]{64}$ ]]; then
+    printf 'error: invalid Temporal checksums for version %s\n' "${version}" >&2
+    exit 1
+  fi
+
+  sed -i.bak -E \
+    -e "s|^version = \"[0-9.]+\"$|version = \"${version}\"|" \
+    -e "s|(linux-x64 = .*checksum = \"sha256:)[0-9a-f]{64}(\".*)|\\1${amd64_checksum}\\2|" \
+    -e "s|(linux-arm64 = .*checksum = \"sha256:)[0-9a-f]{64}(\".*)|\\1${arm64_checksum}\\2|" \
+    "${config_file}"
+  rm "${config_file}.bak"
+  printf '%-10s %s\n' temporal "${version}"
+}
+
+for command in curl docker; do
+  if ! command -v "${command}" >/dev/null 2>&1; then
+    printf 'error: %s is required\n' "${command}" >&2
+    exit 1
+  fi
+done
+
+update_tool go go@1
+update_tool grpcurl grpcurl@1
+update_tool kubectl kubectl@1.36
+update_tool node node@24
+update_temporal
+update_tool yq yq@4
