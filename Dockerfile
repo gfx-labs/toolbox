@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM jdxcode/mise:2026.8.3@sha256:92dbc3f2573926d8974e4641ad8449f16c323130b9f41c39aff19b7b2f500ef6 AS tools
+FROM jdxcode/mise:2026.10.2@sha256:85e4eb6fe66f1e926063fb85e6b37012137bbc6c951de94e06ec2e372bc6373a AS tools
 
 COPY image-tools.toml /mise/config.toml
 
